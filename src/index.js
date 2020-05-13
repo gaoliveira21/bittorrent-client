@@ -1,11 +1,9 @@
 // Open torrent file
 'use strisct';
 
-const tracker = require('./tracker');
+const download = require('./download');
 const torrentParser = require('./torrentParser');
 
-const torrent = torrentParser.open('puppy.torrent');
+const torrent = torrentParser.open(process.argv[2]);
 
-tracker.getPeers(torrent, peers => {
-  console.log('list of peers: ', peers);
-});
+download(torrent);
