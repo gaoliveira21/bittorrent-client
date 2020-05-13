@@ -18,13 +18,13 @@ module.exports.getPeers = (torrent, callback) => {
 
   socket.on('message', response => {
 
-    if(respType(response) === 'connect') {
+    if (respType(response) === 'connect') {
       // 2. receive and parse connect response
       const connResponse = parseConnResp(response);
       // 3. send announce request. this is where we tell the tracker which files we’re interested in
       const announceReq = buildAnnounceReq(connResponse.connectionId, torrent);
       udpSend(socket, announceReq, url);
-    } else if(respType(response) === 'announce') {
+    } else if (respType(response) === 'announce') {
       // 4. parse announce response
       const announceResponse = parseAnnounceResp(response);
       // 5. pass peers to callback
@@ -35,7 +35,7 @@ module.exports.getPeers = (torrent, callback) => {
 
 }
 
-function udpSend(socket, message, rawUrl, callback = () => {}) {
+function udpSend(socket, message, rawUrl, callback = () => { }) {
   const url = urlParse(rawUrl);
   socket.send(message, 0, message.length, url.port, url.host, callback)
 }
@@ -71,7 +71,7 @@ function parseConnResp(response) {
   }
 }
 
-function buildAnnounceReq(connId, torrent, port=6881) {
+function buildAnnounceReq(connId, torrent, port = 6881) {
   const buf = Buffer.allocUnsafe(98);
 
   //connection id
@@ -111,5 +111,30 @@ function buildAnnounceReq(connId, torrent, port=6881) {
   buf.writeUInt16BE(port, 96);
 
   return buf;
+
+}
+
+/**
+ * this function parse de announce response(Buffer) to an object(JSON) 
+ */ 
+function parseAnnounceResp(response) {
+  function group(iterable, groupSize) {
+    let groups = [];
+    for (let index = 0; index < iterable.length; index += groupSize) {
+      groups.push(iterable.slice(index, index + groupSize));
+    }
+    return groups;
+  }
+
+  return {
+    action: response.readUInt32BE(0),
+    transactionId: response.readUInt32BE(4),
+    leechers: response.readUInt32BE(8),
+    seeders: response.readUInt32BE(12),
+    peers: group(response.slice(20), 6).map(adresses => ({
+      ip: adresses.slice(0, 4).join('.'),
+      port: adresses.readUInt16BE(4)
+    }))
+  }
 
 }
