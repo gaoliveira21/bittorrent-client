@@ -41,7 +41,9 @@ function udpSend(socket, message, rawUrl, callback = () => { }) {
 }
 
 function respType(response) {
-
+  const action = response.readUInt32BE(0);
+  if (action === 0) return 'connect';
+  if (action === 1) return 'announce';
 }
 
 function buildConnReq() {
@@ -116,7 +118,7 @@ function buildAnnounceReq(connId, torrent, port = 6881) {
 
 /**
  * this function parse de announce response(Buffer) to an object(JSON) 
- */ 
+ */
 function parseAnnounceResp(response) {
   function group(iterable, groupSize) {
     let groups = [];
