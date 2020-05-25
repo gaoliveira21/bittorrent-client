@@ -22,7 +22,30 @@ function download(peer, torrent) {
 }
 
 function msgHandler(msg, socket) {
-  if(isHandshake(msg)) socket.write(message.buildInterested());
+  if (isHandshake(msg)) {
+    socket.write(message.buildInterested());
+  } else {
+    const m = message.parse(msg);
+
+    switch (m.id) {
+      case 0:
+        chokeHandler();
+        break;
+      case 1:
+        unchokeHandler();
+        break;
+      case 4:
+        haveHandler(m.payload);
+        break;
+      case 5:
+        bitfieldHandler(m.payload);
+        break;
+      case 7:
+        pieceHandler(m.payload);
+        break;
+    }
+
+  }
 }
 
 function isHandshake(msg) {
@@ -31,21 +54,31 @@ function isHandshake(msg) {
 
 function onWholeMsg(socket, callback) {
   let savedBuf = Buffer.alloc(0);
-    let handshake = true;
+  let handshake = true;
 
-    socket.on('data', recvBuf => {
-      // msgLen calculates the length of a whole msg
-      const msgLen = () => handshake ? 
+  socket.on('data', recvBuf => {
+    // msgLen calculates the length of a whole msg
+    const msgLen = () => handshake ?
       savedBuf.readUInt8(0) + 49 :
       savedBuf.readInt32BE(0) + 4;
 
-      savedBuf = Buffer.concat([savedBuf, recvBuf]);
+    savedBuf = Buffer.concat([savedBuf, recvBuf]);
 
-      while (savedBuf.length >= 4 && savedBuf.length >= msgLen()) {
+    while (savedBuf.length >= 4 && savedBuf.length >= msgLen()) {
 
-        callback(savedBuf.slice(0, msgLen()));
-        savedBuf = savedBuf.slice(msgLen());
-        handshake = false;
-      }
-    });
+      callback(savedBuf.slice(0, msgLen()));
+      savedBuf = savedBuf.slice(msgLen());
+      handshake = false;
+    }
+  });
 }
+
+function chokeHandler() {  }
+
+function unchokeHandler() {  }
+
+function haveHandler(payload) {  }
+
+function bitfieldHandler(payload) {  }
+
+function pieceHandler(payload) {  }
