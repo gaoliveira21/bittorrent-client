@@ -6,22 +6,24 @@ const tracker = require('./tracker');
 const message = require('./utils/messages');
 
 module.exports = torrent => {
+  const requested = [];
   tracker.getPeers(torrent, peers => {
-    peers.forEach(peer => download(peer, torrent));
+    peers.forEach(peer => download(peer, torrent, requested));
   })
 };
 
-function download(peer, torrent) {
+function download(peer, torrent, requested) {
   const socket = net.Socket();
   socket.on('error', console.log);
   socket.connect(peer.port, peer.id, () => {
     // write a message here
     socket.write(message.buildHandshake(torrent))
   });
-  onWholeMsg(socket, msg => msgHandler(msg, socket));
+  const queue = [];
+  onWholeMsg(socket, msg => msgHandler(msg, socket, requested, queue));
 }
 
-function msgHandler(msg, socket) {
+function msgHandler(msg, socket, requested, queue) {
   if (isHandshake(msg)) {
     socket.write(message.buildInterested());
   } else {
@@ -35,13 +37,13 @@ function msgHandler(msg, socket) {
         unchokeHandler();
         break;
       case 4:
-        haveHandler(m.payload);
+        haveHandler(m.payload, socket, requested, queue);
         break;
       case 5:
         bitfieldHandler(m.payload);
         break;
       case 7:
-        pieceHandler(m.payload);
+        pieceHandler(m.payload, socket, requested, queue);
         break;
     }
 
@@ -77,8 +79,24 @@ function chokeHandler() {  }
 
 function unchokeHandler() {  }
 
-function haveHandler(payload) {  }
+function haveHandler(payload, socket, requested, queue) { 
+  const pieceIndex = payload.readInt32BE(0);
+  queue.push(pieceIndex);
+  if(queue.length === 1)
+    requestPiece(socket, requested, queue);
+}
 
 function bitfieldHandler(payload) {  }
 
-function pieceHandler(payload) {  }
+function pieceHandler(payload, socket, requested, queue) {  
+  queue.shift();
+  requestPiece(socket, requested, queue)
+}
+
+function requestPiece(socket, requested, queue) {
+  if(requested[queue[0]]) {
+    queue.shift();
+  } {
+    socket.write(message.buildRequest(pieceIndex));
+  }
+}
