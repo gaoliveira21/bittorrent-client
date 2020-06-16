@@ -5,25 +5,28 @@ const Buffer = require('buffer').Buffer;
 const tracker = require('./tracker');
 const message = require('./utils/messages');
 
+const Pieces = require('./utils/Pieces');
+
 module.exports = torrent => {
-  const requested = [];
   tracker.getPeers(torrent, peers => {
-    peers.forEach(peer => download(peer, torrent, requested));
+    const pieces = new Pieces(torrent.info.pieces.length / 20);
+    peers.forEach(peer => download(peer, torrent, pieces));
   })
 };
 
-function download(peer, torrent, requested) {
+function download(peer, torrent, pieces) {
   const socket = net.Socket();
   socket.on('error', console.log);
   socket.connect(peer.port, peer.id, () => {
     // write a message here
     socket.write(message.buildHandshake(torrent))
   });
-  const queue = [];
-  onWholeMsg(socket, msg => msgHandler(msg, socket, requested, queue));
+
+  const queue = { chocked: true, queue: [] };
+  onWholeMsg(socket, msg => msgHandler(msg, socket, pieces, queue));
 }
 
-function msgHandler(msg, socket, requested, queue) {
+function msgHandler(msg, socket, pieces, queue) {
   if (isHandshake(msg)) {
     socket.write(message.buildInterested());
   } else {
@@ -31,19 +34,19 @@ function msgHandler(msg, socket, requested, queue) {
 
     switch (m.id) {
       case 0:
-        chokeHandler();
+        chokeHandler(socket);
         break;
       case 1:
-        unchokeHandler();
+        unchokeHandler(socket, pieces, queue);
         break;
       case 4:
-        haveHandler(m.payload, socket, requested, queue);
+        haveHandler(m.payload);
         break;
       case 5:
         bitfieldHandler(m.payload);
         break;
       case 7:
-        pieceHandler(m.payload, socket, requested, queue);
+        pieceHandler(m.payload);
         break;
     }
 
@@ -75,28 +78,40 @@ function onWholeMsg(socket, callback) {
   });
 }
 
-function chokeHandler() {  }
+function chokeHandler(socket) { 
+  socket.end();
+}
 
-function unchokeHandler() {  }
+function unchokeHandler(socket, pieces, queue) { 
+  queue.chocked = false;
 
-function haveHandler(payload, socket, requested, queue) { 
+  requestPiece(socket, pieces, queue);
+}
+
+function haveHandler(payload, socket, requested, queue) {
   const pieceIndex = payload.readInt32BE(0);
   queue.push(pieceIndex);
-  if(queue.length === 1)
+  if (queue.length === 1)
     requestPiece(socket, requested, queue);
 }
 
-function bitfieldHandler(payload) {  }
+function bitfieldHandler(payload) { }
 
-function pieceHandler(payload, socket, requested, queue) {  
+function pieceHandler(payload, socket, requested, queue) {
   queue.shift();
   requestPiece(socket, requested, queue)
 }
 
-function requestPiece(socket, requested, queue) {
-  if(requested[queue[0]]) {
-    queue.shift();
-  } {
-    socket.write(message.buildRequest(pieceIndex));
+function requestPiece(socket, pieces, queue) {
+  if(queue.chocked) return null;
+
+  while (queue.queue.length) {
+    const pieceIndex = queue.shift();
+
+    if(pieces.needed(pieceIndex)) {
+      socket.write(message.buildRequest(pieceIndex));
+      pieces.addRequested(pieceIndex);
+      break;
+    }
   }
 }

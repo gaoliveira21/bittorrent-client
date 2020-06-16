@@ -23,7 +23,7 @@ module.exports = class {
   }
 
   isDone() {
-    return this.received.every(i => i === true;
+    return this.received.every(i => i === true);
   }
 
 };
